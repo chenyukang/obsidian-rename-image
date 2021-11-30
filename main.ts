@@ -14,13 +14,22 @@ export default class RenameImage extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
+		this.registerEvent(
+			this.app.workspace.on('editor-paste', (evt: ClipboardEvent, editor: Editor, markdownView: MarkdownView) => {
+				console.log("evnt: ", evt);
+			}
+			)
+		);
 		this.registerEvent(
 			this.app.vault.on('create', (file) => {
 				console.log("File created: ", file.name);
 				if (file.name.startsWith("Pasted image")) {
 					console.log("Paste Image:", file);
-					this.app.vault.rename(file, file.name.replace(" ", "_").toLocaleLowerCase());
+					console.log("parent: ", file.parent);
+					this.app.vault.rename(file, file.parent.path + "/" + file.name.replaceAll(" ", "_").toLocaleLowerCase());
+					this.app.workspace.iterateCodeMirrors(cm: CodeMirror.Editor) {
+						cm.refresh();
+					}
 				}
 			})
 		)
