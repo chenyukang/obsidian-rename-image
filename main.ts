@@ -44,10 +44,10 @@ export default class RenameImage extends Plugin {
 					console.log("Paste Image:", file);
 					console.log("parent: ", file.parent);
 					let new_name = file.name.replaceAll(" ", "_").toLocaleLowerCase();
-					this.app.vault.rename(file, file.parent.path + "/" + new_name);
+					//this.app.vault.rename(file, file.parent.path + "/" + new_name);
 					this.app.workspace.iterateCodeMirrors((cm: CodeMirror.Editor) => {
 						console.log("rename: ", file.name, new_name);
-						RenameImage.replaceFirstOccurrence(cm, file.name, new_name);
+						//RenameImage.replaceFirstOccurrence(cm, file.name, new_name);
 					})
 				}
 			})
