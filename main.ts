@@ -13,7 +13,7 @@ export default class RenameImage extends Plugin {
 	settings: MyPluginSettings;
 
 	private static replaceFirstOccurrence(
-		editor: CodeMirror.Editor,
+		editor: Editor,
 		target: string,
 		replacement: string
 	  ) {
@@ -29,11 +29,21 @@ export default class RenameImage extends Plugin {
 		}
 	  }
 
+	private static renameImage(origin: string)  {
+		return origin.replaceAll(" ", "-").toLocaleLowerCase();
+	}
+
 	async onload() {
 		await this.loadSettings();
 		this.registerEvent(
-			this.app.workspace.on('editor-paste', (evt: ClipboardEvent, editor: Editor, markdownView: MarkdownView) => {
-				console.log("evnt: ", evt);
+			this.app.workspace.on('editor-change', (editor: Editor, markdownView: MarkdownView) => {
+				let pos = editor.getCursor();
+				let line = editor.getLine(pos.line);
+				if (line.trim().startsWith("![[Pasted image")) {
+					let orig = line.trim().replace("![[", "").replace("]]", "").split("|").first();
+					let new_name = RenameImage.renameImage(orig);
+					RenameImage.replaceFirstOccurrence(editor, orig, new_name);
+				}
 			}
 			)
 		);
@@ -43,12 +53,8 @@ export default class RenameImage extends Plugin {
 				if (file.name.startsWith("Pasted image")) {
 					console.log("Paste Image:", file);
 					console.log("parent: ", file.parent);
-					let new_name = file.name.replaceAll(" ", "_").toLocaleLowerCase();
-					//this.app.vault.rename(file, file.parent.path + "/" + new_name);
-					this.app.workspace.iterateCodeMirrors((cm: CodeMirror.Editor) => {
-						console.log("rename: ", file.name, new_name);
-						//RenameImage.replaceFirstOccurrence(cm, file.name, new_name);
-					})
+					let new_name = RenameImage.renameImage(file.name);
+					this.app.vault.rename(file, file.parent.path + "/" + new_name);
 				}
 			})
 		)
