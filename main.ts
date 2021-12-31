@@ -81,6 +81,24 @@ export default class RenameImage extends Plugin {
 		navigator.clipboard.writeText(selectedText.content);
 	}
 
+	exportMarkdown(): void {
+		const editor = this.getEditor();
+		const selectedText = this.getSelectedText(editor);
+		let markdown = selectedText.content;
+		let res: String [] = [];
+		markdown.split("\n").forEach((line) => {
+			if (line.startsWith("![[") && line.endsWith("]]")) {
+				const origin = line.substring(3, line.length - 2);
+				let new_line = "![" + origin + "](http://raw.githubusercontent.com/chenyukang/chenyukang.github.io/master/images/ob_" + origin + ")";
+				res.push(new_line);
+			} else {
+				res.push(line);
+			}
+		});
+		let final = res.join("\n");
+		navigator.clipboard.writeText(final);
+	}
+
 	emacsMark() {
 		console.log(this.markStart);
 		const editor = this.getEditor();
@@ -128,6 +146,12 @@ export default class RenameImage extends Plugin {
 		});
 
 		this.addCommand({
+			id: "export-selected",
+			name: "Export selected region",
+			callback: () => this.exportMarkdown(),
+		});
+
+		this.addCommand({
 			id: "emacs-mark-begin",
 			name: "Emacs mark",
 			hotkeys: [
@@ -144,7 +168,7 @@ export default class RenameImage extends Plugin {
 			//cm.on("keyHandled", this.updateCursor);
 		});
 
-		this.registerEvent(
+	/* 	this.registerEvent(
 			this.app.workspace.on('editor-change', (editor: Editor, markdownView: MarkdownView) => {
 				const pos = editor.getCursor();
 				const line = editor.getLine(pos.line);
@@ -165,7 +189,7 @@ export default class RenameImage extends Plugin {
 					this.app.vault.rename(file, file.parent.path + "/" + new_name);
 				}
 			})
-		)
+		) */
 	}
 
 	onunload() {
