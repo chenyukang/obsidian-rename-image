@@ -1,4 +1,7 @@
-import { Editor, MarkdownView, Plugin, EditorPosition } from 'obsidian';
+import { match } from 'assert';
+import { Editor, MarkdownView, Plugin, EditorPosition , MarkdownPostProcessorContext, MarkdownPostProcessor} from 'obsidian';
+import { env } from 'process';
+import { workerData } from 'worker_threads';
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -14,6 +17,7 @@ export default class RenameImage extends Plugin {
 
 	markStart: EditorPosition;
 	markEnd: EditorPosition;
+	ctrlDown: Boolean;
 
 	private static replaceFirstOccurrence(
 		editor: Editor,
@@ -85,14 +89,37 @@ export default class RenameImage extends Plugin {
 		const editor = this.getEditor();
 		const selectedText = this.getSelectedText(editor);
 		let markdown = selectedText.content;
-		let res: String [] = [];
-		markdown.split("\n").forEach((line) => {
-			if (line.startsWith("![[") && line.endsWith("]]")) {
-				const origin = line.substring(3, line.length - 2);
-				let new_line = "![" + origin + "](http://raw.githubusercontent.com/chenyukang/chenyukang.github.io/master/images/ob_" + origin + ")";
-				res.push(new_line);
-			} else {
-				res.push(line);
+		let prefix: String = "";
+		if (markdown.includes("[blog]")) {
+			prefix = "http://catcoding.me/images/ob_";
+		} else if (markdown.includes("[coderscat]")) {
+			prefix = "http://coderscat.com/images/ob_";
+		}
+		let have_header = false;
+		let res: String[] = [];
+		markdown.split("\n").forEach((x) => {
+			let line = x.trim();
+			let pass = false;
+			if ((line.startsWith("[[") && line.endsWith("]]")) || line.includes("date:") ||
+				line.includes("pub_tags: ") ||
+				line.includes("pub_link:")) {
+				pass = true;
+			}
+			if (line.length == 0 && !have_header) {
+				pass = true;
+			}
+			if (line == "---") {
+				have_header = true;
+			}
+			if (!pass) {
+				if (line.startsWith("![[") && line.endsWith("]]")) {
+					const origin = line.substring(3, line.length - 2);
+					let img = RenameImage.renameImage(origin);
+					let new_line = "![" + img + "](" + prefix + img + ")";
+					res.push(new_line);
+				} else {
+					res.push(line);
+				}
 			}
 		});
 		let final = res.join("\n");
@@ -136,6 +163,103 @@ export default class RenameImage extends Plugin {
 		}
 	}
 
+	handleDown = (evt: KeyboardEvent): void => {
+		//console.log('=========================')
+		//console.log('keydown:', evt.key);
+		if (evt.key === "Control") {
+			this.ctrlDown = true;
+		} else {
+			this.ctrlDown = false;
+		}
+
+	}
+
+	handleKeyup = (evt: KeyboardEvent): void => {
+		//console.log('=========================')
+		//console.log('keyup:', evt.key);
+
+		let editor = this.getEditor();
+		if (!editor) return;
+		const cursor = editor.getCursor();
+		var prev = { line: cursor.line, ch: cursor.ch};
+		var found = false;
+		if (evt.key === '.' || evt.key === ',' || evt.key === ';') {
+			var count = 0;
+			while (true) {
+				prev = { line: prev.line, ch: prev.ch - count };
+				const text = editor.getRange(prev, cursor);
+				console.log("text: " + text);
+				if (text.contains("，") || text.contains("。") || text.contains("；") ||
+					text.contains(",") || text.contains(".") || text.contains(";")) {
+					console.log("right");
+					found = true;
+					break;
+				}
+				count++;
+				if(count == 4) {
+					console.log(count);
+					break;
+				}
+			}
+			if(found) {
+				const pos = { line: prev.line, ch: prev.ch + 1 };
+				editor.setSelection(pos, pos);
+				editor.setCursor(pos);
+			}
+		}
+		else if (this.markStart != undefined) {
+			const cursor = editor.getCursor();
+			console.log(cursor);
+			this.markEnd = cursor;
+			//editor.setCursor(cursor);
+			editor.setSelection(this.markStart, this.markEnd);
+		}
+	}
+
+
+	processExternalLinks(
+		plugin: Plugin
+	): ( el: HTMLElement, ctx: MarkdownPostProcessorContext ) => void {
+
+		return function (
+			el: HTMLElement,
+			ctx: MarkdownPostProcessorContext
+		): void {
+			const links = el.querySelectorAll( 'a' );
+			for(let index = 0; index < links.length; index++) {
+				const link = links.item(index) as HTMLAnchorElement;
+				console.log(link.text);
+			}
+		}
+	}
+
+	cleanupTitles() {
+		let editor = this.getEditor();
+		if (!editor) return;
+		const content = editor.getValue()
+		const regexMdLinks = /\[([^\[]+)\](\(.*\))/gm
+		const matches = content.match(regexMdLinks)
+
+		for (var i = 0; i < matches.length; i++) {
+			const origin = matches[i];
+			const elems = origin.split("](");
+			var link = elems[1].replace(")", "");
+			const title = elems[0].replace("[", "");
+			const chars = ["|", "(", "（"]
+			for(let x = 0; x < chars.length; x++) {
+				const c = chars[x];
+				if(title.indexOf(c) != -1) {
+					const title_elems = title.split(c)
+					console.log(title_elems);
+					const striped = title_elems[0].trim()
+					const new_title = "[" + striped + "](" + link + ")"
+					RenameImage.replaceFirstOccurrence(editor, origin, new_title);
+					break;
+				}
+			}
+		}
+	}
+
 	async onload() {
 		await this.loadSettings();
 
@@ -163,33 +287,45 @@ export default class RenameImage extends Plugin {
 			callback: () => this.emacsMark(),
 		});
 
-		this.registerCodeMirror((cm: CodeMirror.Editor) => {
-			//console.log("cm: ", cm);
-			//cm.on("keyHandled", this.updateCursor);
+		this.addCommand({
+			id: "external-link-title-cleanup",
+			name: "Yukang: Cleanup link title",
+			hotkeys: [
+				{
+					modifiers: ['Ctrl'],
+					key: '7',
+				},
+			],
+			callback: () => this.cleanupTitles(),
 		});
 
-	/* 	this.registerEvent(
-			this.app.workspace.on('editor-change', (editor: Editor, markdownView: MarkdownView) => {
-				const pos = editor.getCursor();
-				const line = editor.getLine(pos.line);
-				if (line.trim().startsWith("![[Pasted image")) {
-					const orig = line.trim().replace("![[", "").replace("]]", "").split("|").first();
-					const new_name = RenameImage.renameImage(orig);
-					RenameImage.replaceFirstOccurrence(editor, orig, new_name);
+		this.registerMarkdownPostProcessor( this.processExternalLinks( this ) );
+
+		//this.registerDomEvent(document, 'keyup', this.handleKeyup);
+		//this.registerDomEvent(document, 'keydown', this.handleDown);
+
+		/* 	this.registerEvent(
+				this.app.workspace.on('editor-change', (editor: Editor, markdownView: MarkdownView) => {
+					const pos = editor.getCursor();
+					const line = editor.getLine(pos.line);
+					if (line.trim().startsWith("![[Pasted image")) {
+						const orig = line.trim().replace("![[", "").replace("]]", "").split("|").first();
+						const new_name = RenameImage.renameImage(orig);
+						RenameImage.replaceFirstOccurrence(editor, orig, new_name);
+					}
 				}
-			}
-			)
-		);
-		this.registerEvent(
-			this.app.vault.on('create', (file) => {
-				if (file.name.startsWith("Pasted image")) {
-					console.log("Paste Image:", file);
-					console.log("parent: ", file.parent);
-					const new_name = RenameImage.renameImage(file.name);
-					this.app.vault.rename(file, file.parent.path + "/" + new_name);
-				}
-			})
-		) */
+				)
+			);
+			this.registerEvent(
+				this.app.vault.on('create', (file) => {
+					if (file.name.startsWith("Pasted image")) {
+						console.log("Paste Image:", file);
+						console.log("parent: ", file.parent);
+						const new_name = RenameImage.renameImage(file.name);
+						this.app.vault.rename(file, file.parent.path + "/" + new_name);
+					}
+				})
+			) */
 	}
 
 	onunload() {
