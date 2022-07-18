@@ -1,5 +1,5 @@
 import { match } from 'assert';
-import { Editor, MarkdownView, Plugin, EditorPosition , MarkdownPostProcessorContext, MarkdownPostProcessor} from 'obsidian';
+import { moment, Editor, MarkdownView, Plugin, EditorPosition , MarkdownPostProcessorContext, MarkdownPostProcessor} from 'obsidian';
 import { env } from 'process';
 import { workerData } from 'worker_threads';
 
@@ -260,6 +260,16 @@ export default class RenameImage extends Plugin {
 		}
 	}
 
+	insertCurrentTimestamp() {
+		let editor = this.getEditor();
+		let lastLineNumber = editor.lastLine();
+		let lastLine = editor.getLine(lastLineNumber);
+		const cursor = { line: lastLineNumber, ch: lastLine.length};
+		const timestamp = "## " + moment().format("HH:mm");
+		editor.replaceRange(`\n${timestamp}\n`, cursor);
+		editor.setCursor({ line: lastLineNumber + 2, ch: 0 });
+	}
+
 	async onload() {
 		await this.loadSettings();
 
@@ -276,18 +286,6 @@ export default class RenameImage extends Plugin {
 		});
 
 		this.addCommand({
-			id: "emacs-mark-begin",
-			name: "Emacs mark",
-			hotkeys: [
-				{
-					modifiers: ['Ctrl'],
-					key: 'Space',
-				},
-			],
-			callback: () => this.emacsMark(),
-		});
-
-		this.addCommand({
 			id: "external-link-title-cleanup",
 			name: "Yukang: Cleanup link title",
 			hotkeys: [
@@ -297,6 +295,12 @@ export default class RenameImage extends Plugin {
 				},
 			],
 			callback: () => this.cleanupTitles(),
+		});
+
+		this.addCommand({
+			id: "insert-current-timestamp",
+			name: "Insert current timestamp",
+			callback: () => this.insertCurrentTimestamp(),
 		});
 
 		this.registerMarkdownPostProcessor( this.processExternalLinks( this ) );
