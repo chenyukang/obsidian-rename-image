@@ -216,7 +216,6 @@ export default class RenameImage extends Plugin {
 		}
 	}
 
-
 	processExternalLinks(
 		plugin: Plugin
 	): ( el: HTMLElement, ctx: MarkdownPostProcessorContext ) => void {
@@ -265,8 +264,11 @@ export default class RenameImage extends Plugin {
 		let lastLineNumber = editor.lastLine();
 		let lastLine = editor.getLine(lastLineNumber);
 		const cursor = { line: lastLineNumber, ch: lastLine.length};
-		const timestamp = "## " + moment().format("HH:mm");
-		editor.replaceRange(`\n${timestamp}\n`, cursor);
+		let timestamp = "## " + moment().format("HH:mm") + "\n";
+		if(lastLine.trim().length > 0) {
+			timestamp = "\n" + timestamp;
+		}
+		editor.replaceRange(timestamp, cursor);
 		editor.setCursor({ line: lastLineNumber + 2, ch: 0 });
 	}
 
@@ -302,34 +304,6 @@ export default class RenameImage extends Plugin {
 			name: "Insert current timestamp",
 			callback: () => this.insertCurrentTimestamp(),
 		});
-
-		this.registerMarkdownPostProcessor( this.processExternalLinks( this ) );
-
-		//this.registerDomEvent(document, 'keyup', this.handleKeyup);
-		//this.registerDomEvent(document, 'keydown', this.handleDown);
-
-		/* 	this.registerEvent(
-				this.app.workspace.on('editor-change', (editor: Editor, markdownView: MarkdownView) => {
-					const pos = editor.getCursor();
-					const line = editor.getLine(pos.line);
-					if (line.trim().startsWith("![[Pasted image")) {
-						const orig = line.trim().replace("![[", "").replace("]]", "").split("|").first();
-						const new_name = RenameImage.renameImage(orig);
-						RenameImage.replaceFirstOccurrence(editor, orig, new_name);
-					}
-				}
-				)
-			);
-			this.registerEvent(
-				this.app.vault.on('create', (file) => {
-					if (file.name.startsWith("Pasted image")) {
-						console.log("Paste Image:", file);
-						console.log("parent: ", file.parent);
-						const new_name = RenameImage.renameImage(file.name);
-						this.app.vault.rename(file, file.parent.path + "/" + new_name);
-					}
-				})
-			) */
 	}
 
 	onunload() {
